@@ -1,6 +1,7 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const authMiddleware = require("../middleware/auth.middleware");
+const { allowedCategories } = require("../services/news.service");
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -18,7 +19,7 @@ router.get("/preferences", authMiddleware, async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+      return res.status(404).json({ message: "User not found." });
     }
 
     return res.json({
@@ -26,7 +27,7 @@ router.get("/preferences", authMiddleware, async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({
-      message: "Tercihler alınırken hata oluştu.",
+      message: "Preferences could not be loaded.",
       error: error.message,
     });
   }
@@ -38,14 +39,26 @@ router.put("/preferences", authMiddleware, async (req, res) => {
 
     if (!Array.isArray(preferences) || preferences.length === 0) {
       return res.status(400).json({
-        message: "En az bir kategori seçilmelidir.",
+        message: "Select at least one category.",
+      });
+    }
+
+    const safePreferences = [
+      ...new Set(
+        preferences.filter((preference) => allowedCategories.includes(preference))
+      ),
+    ];
+
+    if (safePreferences.length === 0) {
+      return res.status(400).json({
+        message: "Select at least one supported category.",
       });
     }
 
     const updatedUser = await prisma.user.update({
       where: { id: req.user.id },
       data: {
-        preferences: preferences.join(","),
+        preferences: safePreferences.join(","),
       },
       select: {
         id: true,
@@ -56,7 +69,7 @@ router.put("/preferences", authMiddleware, async (req, res) => {
     });
 
     return res.json({
-      message: "Tercihler güncellendi.",
+      message: "Preferences updated.",
       user: {
         ...updatedUser,
         preferences: updatedUser.preferences.split(","),
@@ -64,7 +77,7 @@ router.put("/preferences", authMiddleware, async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({
-      message: "Tercihler güncellenirken hata oluştu.",
+      message: "Preferences could not be updated.",
       error: error.message,
     });
   }

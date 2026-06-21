@@ -11,7 +11,7 @@ router.post("/register", async (req, res) => {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "Ad, e-posta ve şifre zorunludur." });
+      return res.status(400).json({ message: "Name, email and password are required." });
     }
 
     const existingUser = await prisma.user.findUnique({
@@ -19,7 +19,7 @@ router.post("/register", async (req, res) => {
     });
 
     if (existingUser) {
-      return res.status(400).json({ message: "Bu e-posta zaten kayıtlı." });
+      return res.status(400).json({ message: "This email is already registered." });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -39,7 +39,7 @@ router.post("/register", async (req, res) => {
     );
 
     return res.status(201).json({
-      message: "Kayıt başarılı.",
+      message: "Registration successful.",
       token,
       user: {
         id: user.id,
@@ -50,7 +50,7 @@ router.post("/register", async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({
-      message: "Kayıt sırasında hata oluştu.",
+      message: "Registration failed.",
       error: error.message,
     });
   }
@@ -61,7 +61,7 @@ router.post("/login", async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ message: "E-posta ve şifre zorunludur." });
+      return res.status(400).json({ message: "Email and password are required." });
     }
 
     const user = await prisma.user.findUnique({
@@ -69,13 +69,13 @@ router.post("/login", async (req, res) => {
     });
 
     if (!user) {
-      return res.status(401).json({ message: "E-posta veya şifre hatalı." });
+      return res.status(401).json({ message: "Email or password is incorrect." });
     }
 
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
 
     if (!isPasswordCorrect) {
-      return res.status(401).json({ message: "E-posta veya şifre hatalı." });
+      return res.status(401).json({ message: "Email or password is incorrect." });
     }
 
     const token = jwt.sign(
@@ -85,7 +85,7 @@ router.post("/login", async (req, res) => {
     );
 
     return res.json({
-      message: "Giriş başarılı.",
+      message: "Login successful.",
       token,
       user: {
         id: user.id,
@@ -96,7 +96,7 @@ router.post("/login", async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({
-      message: "Giriş sırasında hata oluştu.",
+      message: "Login failed.",
       error: error.message,
     });
   }

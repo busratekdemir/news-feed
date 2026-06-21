@@ -30,9 +30,7 @@ function BreakingNews() {
         setArticles([]);
       }
       setError("");
-      const response = await api.get(
-        refresh ? `/api/news?refresh=true&ts=${Date.now()}` : "/api/news"
-      );
+      const response = await api.get("/api/news");
       const fetchedArticles = response.data.articles || [];
 
       rememberArticlesForDetail(fetchedArticles);
@@ -80,7 +78,7 @@ function BreakingNews() {
         <div className="page-heading">
           <div>
             <h1>Breaking News</h1>
-            <p>Follow real-time updates from your personalized news stream.</p>
+            <p>Follow updates from your locally cached personalized news stream.</p>
           </div>
 
           <button
@@ -96,8 +94,8 @@ function BreakingNews() {
 
         <div className="live-banner">
           <Radio size={18} />
-          <strong>LIVE UPDATES</strong>
-          <span>Auto-refreshes every 5 minutes</span>
+          <strong>LOCAL UPDATES</strong>
+          <span>Reads from the local database every 5 minutes</span>
         </div>
 
         {error && <div className="state-box error">{error}</div>}

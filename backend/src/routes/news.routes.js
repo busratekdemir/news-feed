@@ -5,6 +5,10 @@ const {
   fetchPersonalizedNews,
   allowedCategories,
 } = require("../services/news.service");
+const {
+  rankArticlesForUser,
+  recordInteraction,
+} = require("../services/recommendation.service");
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -25,24 +29,72 @@ router.get("/", authMiddleware, async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+      return res.status(404).json({ message: "User not found." });
     }
 
     const categories = user.preferences
-      ? user.preferences.split(",")
+      ? user.preferences
+          .split(",")
+          .map((category) => category.trim())
+          .filter(Boolean)
       : ["general"];
 
-    const articles = await fetchPersonalizedNews(categories);
+    const refresh = req.query.refresh === "true";
+    const feed = await fetchPersonalizedNews(categories, {
+      refresh,
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+      pages: req.query.pages,
+      ts: req.query.ts,
+    });
+    const recommendations = await rankArticlesForUser(
+      req.user.id,
+      feed.articles,
+      categories,
+      { refresh }
+    );
 
     return res.json({
-      message: "Kişiselleştirilmiş haber akışı getirildi.",
+      message: "Personalized news feed loaded.",
       selectedCategories: categories,
-      totalResults: articles.length,
-      articles,
+      totalResults: recommendations.articles.length,
+      refreshed: refresh,
+      articles: recommendations.articles,
+      sections: recommendations.sections,
+      profile: recommendations.profile,
+      fetchMeta: feed.meta,
     });
   } catch (error) {
     return res.status(500).json({
-      message: "Haberler getirilirken hata oluştu.",
+      message: "News could not be loaded.",
+      error: error.message,
+    });
+  }
+});
+
+router.post("/interactions", authMiddleware, async (req, res) => {
+  try {
+    const { article, eventType, durationSeconds, scrollPercentage, bookmarked } =
+      req.body;
+
+    if (!article?.id) {
+      return res.status(400).json({ message: "Article is required." });
+    }
+
+    const profile = await recordInteraction(req.user.id, article, {
+      eventType,
+      durationSeconds,
+      scrollPercentage,
+      bookmarked,
+    });
+
+    return res.status(201).json({
+      message: "Interaction recorded.",
+      profile,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Interaction could not be recorded.",
       error: error.message,
     });
   }

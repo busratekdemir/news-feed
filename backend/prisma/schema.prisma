@@ -8,10 +8,76 @@ datasource db {
 }
 
 model User {
-  id          Int      @id @default(autoincrement())
-  name        String
-  email       String   @unique
-  password    String
-  preferences String   @default("general")
-  createdAt   DateTime @default(now())
+  id           Int                  @id @default(autoincrement())
+  name         String
+  email        String               @unique
+  password     String
+  preferences  String               @default("general")
+  createdAt    DateTime             @default(now())
+  interactions ArticleInteraction[]
+  profile      UserProfile?
+  cache        RecommendationCache?
+}
+
+model ArticleInteraction {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  articleId        String
+  title            String
+  category         String
+  source           String
+  url              String?
+  keywords         String   @default("[]")
+  entities         String   @default("[]")
+  eventType        String
+  durationSeconds  Int      @default(0)
+  scrollPercentage Float    @default(0)
+  bookmarked       Boolean  @default(false)
+  visitCount       Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, articleId])
+  @@index([userId, category])
+  @@index([userId, updatedAt])
+}
+
+model UserProfile {
+  id                Int      @id @default(autoincrement())
+  userId            Int      @unique
+  categoryWeights   String   @default("{}")
+  sourceWeights     String   @default("{}")
+  keywordWeights    String   @default("{}")
+  entityWeights     String   @default("{}")
+  recentInterests   String   @default("[]")
+  longTermInterests String   @default("[]")
+  readingFrequency  Float    @default(0)
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RecommendationCache {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  cacheKey  String
+  payload   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NewsCache {
+  id           Int      @id @default(autoincrement())
+  category     String   @unique
+  articlesJson String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model NewsApiUsage {
+  id           Int      @id @default(autoincrement())
+  date         String   @unique
+  requestCount Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

@@ -4,7 +4,7 @@ function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Yetkilendirme tokenı bulunamadı." });
+    return res.status(401).json({ message: "Authorization token is missing." });
   }
 
   const token = authHeader.split(" ")[1];
@@ -14,7 +14,7 @@ function authMiddleware(req, res, next) {
     req.user = decoded;
     next();
   } catch (error) {
-    return res.status(401).json({ message: "Geçersiz veya süresi dolmuş token." });
+    return res.status(401).json({ message: "Token is invalid or expired." });
   }
 }
 

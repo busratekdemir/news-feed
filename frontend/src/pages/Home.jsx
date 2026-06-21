@@ -58,9 +58,7 @@ function Home() {
 
       setError("");
 
-      const response = await api.get(
-        refresh ? `/api/news?refresh=true&ts=${Date.now()}` : "/api/news"
-      );
+      const response = await api.get("/api/news");
 
       const fetchedArticles = response.data.articles || [];
 
