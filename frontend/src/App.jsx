@@ -12,6 +12,7 @@ import Categories from "./pages/Categories";
 import BreakingNews from "./pages/BreakingNews";
 import Explore from "./pages/Explore";
 import NewsDetail from "./pages/NewsDetail";
+import SavedNews from "./pages/SavedNews";
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
             <Route path="categories" element={<Categories />} />
             <Route path="breaking" element={<BreakingNews />} />
             <Route path="explore" element={<Explore />} />
+            <Route path="saved" element={<SavedNews />} />
             <Route path="news/:id" element={<NewsDetail />} />
           </Route>
         </Routes>

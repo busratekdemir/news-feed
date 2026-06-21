@@ -1,7 +1,25 @@
-import { Bell, ChevronDown, Search, Newspaper } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { ChevronDown, Search, Newspaper, Bookmark } from "lucide-react";
+import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
+import { useState } from "react";
 
 function Navbar() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get("q") || "");
+
+  const handleSearch = (event) => {
+    event.preventDefault();
+
+    const trimmed = query.trim();
+
+    if (!trimmed) {
+      navigate("/");
+      return;
+    }
+
+    navigate(`/?q=${encodeURIComponent(trimmed)}`);
+  };
+
   return (
     <header className="navbar">
       <div className="brand">
@@ -21,15 +39,23 @@ function Navbar() {
       </nav>
 
       <div className="nav-right">
-        <div className="search-box">
+        <form className="search-box" onSubmit={handleSearch}>
           <Search size={18} />
-          <input placeholder="Search news..." />
-        </div>
+          <input
+            placeholder="Search news..."
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </form>
 
-        <div className="notification">
-          <Bell size={21} />
-          <span>3</span>
-        </div>
+        <Link
+          to="/saved"
+          className="notification"
+          title="Saved news"
+          aria-label="Saved news"
+        >
+          <Bookmark size={21} />
+        </Link>
 
         <div className="profile">
           <img

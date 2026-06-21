@@ -1,33 +1,76 @@
-import { useEffect, useState } from "react";
-import { Bell, Radio, Share2, TrendingUp } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Radio, RefreshCw, TrendingUp } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/api";
+import {
+  articlePath,
+  fallbackImage,
+  filterArticles,
+  rememberArticleForDetail,
+  rememberArticlesForDetail,
+} from "../utils/news";
+import {
+  sortArticlesByPersonalization,
+  trackArticleClick,
+} from "../utils/personalization";
 
 function BreakingNews() {
+  const [searchParams] = useSearchParams();
   const [articles, setArticles] = useState([]);
+  const [selectedCategories, setSelectedCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const searchQuery = searchParams.get("q") || "";
 
-  useEffect(() => {
-    loadBreakingNews();
-
-    const interval = setInterval(() => {
-      loadBreakingNews();
-    }, 5 * 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadBreakingNews = async () => {
+  const loadBreakingNews = useCallback(async ({ refresh = false } = {}) => {
     try {
-      const response = await api.get("/api/news");
-      setArticles(response.data.articles || []);
+      if (refresh) {
+        setRefreshing(true);
+        setArticles([]);
+      }
+      setError("");
+      const response = await api.get(
+        refresh ? `/api/news?refresh=true&ts=${Date.now()}` : "/api/news"
+      );
+      const fetchedArticles = response.data.articles || [];
+
+      rememberArticlesForDetail(fetchedArticles);
+      setArticles(fetchedArticles);
+      setSelectedCategories(response.data.selectedCategories || []);
+    } catch (err) {
+      setError(err.response?.data?.message || "Breaking news could not be loaded.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  const main = articles[0];
-  const timeline = articles.slice(1, 5);
-  const mostRead = articles.slice(5, 10);
+  useEffect(() => {
+    const timeout = setTimeout(loadBreakingNews, 0);
+
+    const interval = setInterval(() => {
+      loadBreakingNews({ refresh: true });
+    }, 5 * 60 * 1000);
+
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
+  }, [loadBreakingNews]);
+
+  const visibleArticles = sortArticlesByPersonalization(
+    filterArticles(articles, searchQuery),
+    selectedCategories
+  );
+  const main = visibleArticles[0];
+  const timeline = visibleArticles.slice(1, 5);
+  const mostRead = visibleArticles.slice(5, 10);
+
+  const handleArticleOpen = (article) => {
+    rememberArticleForDetail(article);
+    trackArticleClick(article);
+  };
 
   if (loading) return <div className="state-box">Loading breaking news...</div>;
 
@@ -40,9 +83,14 @@ function BreakingNews() {
             <p>Follow real-time updates from your personalized news stream.</p>
           </div>
 
-          <button className="primary-btn">
-            <Bell size={17} />
-            Enable Alerts
+          <button
+            className="secondary-btn"
+            type="button"
+            onClick={() => loadBreakingNews({ refresh: true })}
+            disabled={loading || refreshing}
+          >
+            <RefreshCw size={16} />
+            {refreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
 
@@ -52,25 +100,43 @@ function BreakingNews() {
           <span>Auto-refreshes every 5 minutes</span>
         </div>
 
+        {error && <div className="state-box error">{error}</div>}
+        {refreshing && <div className="state-box">Refreshing breaking news...</div>}
+
+        {searchQuery && !error && (
+          <div className="search-status">
+            Showing results for <strong>{searchQuery}</strong>
+          </div>
+        )}
+
+        {!error && visibleArticles.length === 0 && (
+          <div className="state-box">No stories match your search.</div>
+        )}
+
         {main && (
-          <article className="breaking-hero">
+          <Link
+            to={articlePath(main)}
+            className="breaking-hero"
+            onClick={() => handleArticleOpen(main)}
+          >
             <SafeImage src={main.imageUrl} category={main.category} alt={main.title} />
             <div>
               <span className="red-badge">BREAKING</span>
               <h2>{main.title}</h2>
               <p>{main.description || "Latest update from the selected news categories."}</p>
               <small>{main.source}</small>
-              <button>
-                <Share2 size={16} />
-                Share
-              </button>
             </div>
-          </article>
+          </Link>
         )}
 
         <div className="timeline-list">
           {timeline.map((item, index) => (
-            <article className="timeline-item" key={item.id}>
+            <Link
+              to={articlePath(item)}
+              className="timeline-item"
+              key={item.id}
+              onClick={() => handleArticleOpen(item)}
+            >
               <div className="timeline-time">
                 <span></span>
                 <small>{(index + 1) * 8} min ago</small>
@@ -82,7 +148,7 @@ function BreakingNews() {
                 <strong>{item.title}</strong>
                 <p>{item.description || "More details are being updated."}</p>
               </div>
-            </article>
+            </Link>
           ))}
         </div>
       </section>
@@ -94,13 +160,18 @@ function BreakingNews() {
           </h3>
 
           {mostRead.map((item, index) => (
-            <div className="trend-item" key={item.id}>
+            <Link
+              to={articlePath(item)}
+              className="trend-item"
+              key={item.id}
+              onClick={() => handleArticleOpen(item)}
+            >
               <span>{index + 1}</span>
               <div>
                 <strong>{item.title}</strong>
                 <p>{item.source}</p>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
 
@@ -126,27 +197,6 @@ function SafeImage({ src, category, alt }) {
       }}
     />
   );
-}
-
-function fallbackImage(category) {
-  const images = {
-    technology:
-      "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=600&h=360&fit=crop",
-    business:
-      "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=360&fit=crop",
-    sports:
-      "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=600&h=360&fit=crop",
-    science:
-      "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=600&h=360&fit=crop",
-    health:
-      "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=600&h=360&fit=crop",
-    general:
-      "https://images.unsplash.com/photo-1495020689067-958852a7765e?w=600&h=360&fit=crop",
-    entertainment:
-      "https://images.unsplash.com/photo-1505686994434-e3cc5abf1330?w=600&h=360&fit=crop",
-  };
-
-  return images[category] || images.general;
 }
 
 export default BreakingNews;

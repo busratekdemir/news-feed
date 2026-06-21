@@ -1,17 +1,12 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { useState } from "react";
 import api from "../api/api";
-
-const AuthContext = createContext();
+import AuthContext from "./auth-context";
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
+  const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem("user");
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-  }, []);
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
 
   const login = async (email, password) => {
     const response = await api.post("/api/auth/login", { email, password });
@@ -53,8 +48,4 @@ export function AuthProvider({ children }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  return useContext(AuthContext);
 }

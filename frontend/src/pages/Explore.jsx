@@ -1,25 +1,72 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Hash, Sparkles, TrendingUp, Users } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/api";
+import {
+  articlePath,
+  categoryLabel,
+  fallbackImage,
+  filterArticles,
+  rememberArticleForDetail,
+  rememberArticlesForDetail,
+} from "../utils/news";
+import {
+  getRecommendationReason,
+  sortArticlesByPersonalization,
+  trackArticleClick,
+} from "../utils/personalization";
+
+const trends = [
+  { tag: "#AI", count: "8.2K" },
+  { tag: "#Markets", count: "6.4K" },
+  { tag: "#Startups", count: "5.8K" },
+  { tag: "#Space", count: "4.9K" },
+  { tag: "#Sports", count: "7.1K" },
+  { tag: "#Health", count: "3.6K" },
+];
 
 function Explore() {
+  const [searchParams] = useSearchParams();
   const [articles, setArticles] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const searchQuery = searchParams.get("q") || "";
 
-  useEffect(() => {
-    loadExplore();
+  const loadExplore = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const response = await api.get("/api/news");
+      const fetchedArticles = response.data.articles || [];
+
+      rememberArticlesForDetail(fetchedArticles);
+      setArticles(fetchedArticles);
+      setCategories(response.data.selectedCategories || []);
+    } catch (err) {
+      setError(err.response?.data?.message || "Explore stories could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const loadExplore = async () => {
-    const response = await api.get("/api/news");
-    setArticles(response.data.articles || []);
-    setCategories(response.data.selectedCategories || []);
-  };
+  useEffect(() => {
+    const timeout = setTimeout(loadExplore, 0);
+    return () => clearTimeout(timeout);
+  }, [loadExplore]);
 
-  const featured = articles.slice(0, 3);
-  const today = articles.slice(3, 7);
-  const recommended = articles.slice(7, 10);
-  const trends = ["#AI", "#Markets", "#Startups", "#Space", "#Sports", "#Health"];
+  const visibleArticles = sortArticlesByPersonalization(
+    filterArticles(articles, searchQuery),
+    categories
+  );
+  const featured = visibleArticles.slice(0, 3);
+  const today = visibleArticles.slice(3, 7);
+  const recommended = visibleArticles.slice(7, 10);
+
+  const handleArticleOpen = (article) => {
+    rememberArticleForDetail(article);
+    trackArticleClick(article);
+  };
 
   return (
     <div className="dashboard-grid">
@@ -31,69 +78,112 @@ function Explore() {
           </div>
         </div>
 
-        <div className="explore-hero-grid">
-          {featured.map((item, index) => (
-            <article className="explore-hero-card" key={item.id}>
-              <img src={item.imageUrl || fallbackImage(item.category)} />
-              <span>{index === 0 ? "TREND" : index === 1 ? "FEATURED" : "RECOMMENDED"}</span>
-              <h2>{item.title}</h2>
-              <p>{item.source}</p>
-            </article>
-          ))}
-        </div>
+        {loading && <div className="state-box">Loading explore stories...</div>}
+        {error && <div className="state-box error">{error}</div>}
 
-        <SectionTitle title="Trending Topics" />
-
-        <div className="topic-row">
-          {trends.map((trend) => (
-            <div className="topic-card" key={trend}>
-              <Hash size={22} />
-              <strong>{trend}</strong>
-              <span>{Math.floor(Math.random() * 9) + 3}.2K stories</span>
-            </div>
-          ))}
-        </div>
-
-        <SectionTitle title="Today’s Highlights" />
-
-        <div className="popular-grid">
-          {today.map((item) => (
-            <article className="popular-card" key={item.id}>
-              <img src={item.imageUrl || fallbackImage(item.category)} />
-              <div>
-                <small>{item.category} · {item.source}</small>
-                <h3>{item.title}</h3>
+        {!loading && !error && (
+          <>
+            {searchQuery && (
+              <div className="search-status">
+                Showing results for <strong>{searchQuery}</strong>
               </div>
-            </article>
-          ))}
-        </div>
+            )}
 
-        <SectionTitle title="Recommended For You" />
+            {visibleArticles.length === 0 && (
+              <div className="state-box">No stories match your search.</div>
+            )}
 
-        <div className="hot-row">
-          {recommended.map((item) => (
-            <div className="hot-card" key={item.id}>
-              <img src={item.imageUrl || fallbackImage(item.category)} />
-              <div>
-                <small>{item.category}</small>
-                <strong>{item.title}</strong>
-              </div>
+            <div className="explore-hero-grid">
+              {featured.map((item, index) => (
+                <Link
+                  to={articlePath(item)}
+                  className="explore-hero-card"
+                  key={item.id}
+                  onClick={() => handleArticleOpen(item)}
+                >
+                  <SafeImage src={item.imageUrl} category={item.category} alt={item.title} />
+                  <span>{index === 0 ? "TREND" : index === 1 ? "FEATURED" : "RECOMMENDED"}</span>
+                  <h2>{item.title}</h2>
+                  <p>{getRecommendationReason(item, categories)}</p>
+                </Link>
+              ))}
             </div>
-          ))}
-        </div>
+
+            <SectionTitle title="Trending Topics" />
+
+            <div className="topic-row">
+              {trends.map((trend) => (
+                <div className="topic-card" key={trend.tag}>
+                  <Hash size={22} />
+                  <strong>{trend.tag}</strong>
+                  <span>{trend.count} stories</span>
+                </div>
+              ))}
+            </div>
+
+            <SectionTitle title="Today's Highlights" />
+
+            <div className="popular-grid">
+              {today.map((item) => (
+                <Link
+                  to={articlePath(item)}
+                  className="popular-card"
+                  key={item.id}
+                  onClick={() => handleArticleOpen(item)}
+                >
+                  <SafeImage src={item.imageUrl} category={item.category} alt={item.title} />
+                  <div>
+                    <small>{categoryLabel(item.category)} · {item.source}</small>
+                    <h3>{item.title}</h3>
+                    <p className="match-text">
+                      {getRecommendationReason(item, categories)}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            <SectionTitle title="Recommended For You" />
+
+            <div className="hot-row">
+              {recommended.map((item) => (
+                <Link
+                  to={articlePath(item)}
+                  className="hot-card"
+                  key={item.id}
+                  onClick={() => handleArticleOpen(item)}
+                >
+                  <SafeImage src={item.imageUrl} category={item.category} alt={item.title} />
+                  <div>
+                    <small>{categoryLabel(item.category)}</small>
+                    <strong>{item.title}</strong>
+                    <p className="match-text compact">
+                      {getRecommendationReason(item, categories)}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
       <aside className="right-sidebar">
         <div className="side-card">
-          <h3><TrendingUp size={19} /> Today’s Trends</h3>
-          {articles.slice(10, 15).map((item, index) => (
-            <div className="trend-item" key={item.id}>
+          <h3><TrendingUp size={19} /> Today's Trends</h3>
+          {visibleArticles.slice(10, 15).map((item, index) => (
+            <Link
+              to={articlePath(item)}
+              className="trend-item"
+              key={item.id}
+              onClick={() => handleArticleOpen(item)}
+            >
               <span>{index + 1}</span>
               <div>
                 <strong>{item.title}</strong>
                 <p>{item.source}</p>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
 
@@ -102,7 +192,7 @@ function Explore() {
           <p>Your explore page is shaped by:</p>
           <div className="source-list">
             {categories.map((cat) => (
-              <span key={cat}>{cat}</span>
+              <span key={cat}>{categoryLabel(cat)}</span>
             ))}
           </div>
         </div>
@@ -110,7 +200,6 @@ function Explore() {
         <div className="side-card">
           <h3><Users size={19} /> Sources To Follow</h3>
           <p>Follow trusted publishers to improve recommendations.</p>
-          <button className="primary-btn small">Follow Sources</button>
         </div>
       </aside>
     </div>
@@ -121,18 +210,19 @@ function SectionTitle({ title }) {
   return <h2 className="section-title">{title}</h2>;
 }
 
-function fallbackImage(category) {
-  const images = {
-    technology: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=600&h=360&fit=crop",
-    business: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=360&fit=crop",
-    sports: "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=600&h=360&fit=crop",
-    science: "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=600&h=360&fit=crop",
-    health: "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=600&h=360&fit=crop",
-    general: "https://images.unsplash.com/photo-1495020689067-958852a7765e?w=600&h=360&fit=crop",
-    entertainment: "https://images.unsplash.com/photo-1505686994434-e3cc5abf1330?w=600&h=360&fit=crop",
-  };
+function SafeImage({ src, category, alt }) {
+  const fallback = fallbackImage(category);
 
-  return images[category] || images.general;
+  return (
+    <img
+      src={src || fallback}
+      alt={alt || "News image"}
+      onError={(event) => {
+        event.currentTarget.onerror = null;
+        event.currentTarget.src = fallback;
+      }}
+    />
+  );
 }
 
 export default Explore;

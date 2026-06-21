@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Newspaper } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 
 function Register() {
   const navigate = useNavigate();
@@ -32,7 +32,7 @@ function Register() {
       await register(form.name, form.email, form.password);
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.message || "Kayıt olurken hata oluştu.");
+      setError(err.response?.data?.message || "Registration failed.");
     } finally {
       setLoading(false);
     }
@@ -48,42 +48,42 @@ function Register() {
           <h1>NewsFeed</h1>
         </div>
 
-        <h2>Yeni hesap oluştur</h2>
-        <p>İlgi alanlarını seçerek sana özel haber akışını başlat.</p>
+        <h2>Create your account</h2>
+        <p>Choose your interests and start a personalized news feed.</p>
 
         <form onSubmit={handleSubmit} className="auth-form">
           <label>
-            Ad Soyad
+            Full Name
             <input
               name="name"
               type="text"
               value={form.name}
               onChange={handleChange}
-              placeholder="Büşra Tekdemir"
+              placeholder="Alex Morgan"
               required
             />
           </label>
 
           <label>
-            E-posta
+            Email
             <input
               name="email"
               type="email"
               value={form.email}
               onChange={handleChange}
-              placeholder="ornek@mail.com"
+              placeholder="you@example.com"
               required
             />
           </label>
 
           <label>
-            Şifre
+            Password
             <input
               name="password"
               type="password"
               value={form.password}
               onChange={handleChange}
-              placeholder="En az 6 karakter"
+              placeholder="At least 6 characters"
               minLength="6"
               required
             />
@@ -92,12 +92,12 @@ function Register() {
           {error && <div className="auth-error">{error}</div>}
 
           <button disabled={loading}>
-            {loading ? "Hesap oluşturuluyor..." : "Kayıt Ol"}
+            {loading ? "Creating account..." : "Create Account"}
           </button>
         </form>
 
         <span className="auth-link">
-          Zaten hesabın var mı? <Link to="/login">Giriş yap</Link>
+          Already have an account? <Link to="/login">Sign in</Link>
         </span>
       </section>
     </main>

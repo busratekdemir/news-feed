@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Newspaper } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 
 function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
   const [form, setForm] = useState({
-    email: "busra@test.com",
-    password: "123456",
+    email: "",
+    password: "",
   });
 
   const [error, setError] = useState("");
@@ -31,7 +31,7 @@ function Login() {
       await login(form.email, form.password);
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.message || "Giriş yapılırken hata oluştu.");
+      setError(err.response?.data?.message || "Login failed.");
     } finally {
       setLoading(false);
     }
@@ -47,24 +47,24 @@ function Login() {
           <h1>NewsFeed</h1>
         </div>
 
-        <h2>Hesabına giriş yap</h2>
-        <p>Kişiselleştirilmiş haber akışına devam et.</p>
+        <h2>Sign in to your account</h2>
+        <p>Continue to your personalized news feed.</p>
 
         <form onSubmit={handleSubmit} className="auth-form">
           <label>
-            E-posta
+            Email
             <input
               name="email"
               type="email"
               value={form.email}
               onChange={handleChange}
-              placeholder="ornek@mail.com"
+              placeholder="you@example.com"
               required
             />
           </label>
 
           <label>
-            Şifre
+            Password
             <input
               name="password"
               type="password"
@@ -78,12 +78,12 @@ function Login() {
           {error && <div className="auth-error">{error}</div>}
 
           <button disabled={loading}>
-            {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
+            {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
 
         <span className="auth-link">
-          Hesabın yok mu? <Link to="/register">Kayıt ol</Link>
+          Do not have an account? <Link to="/register">Create one</Link>
         </span>
       </section>
     </main>

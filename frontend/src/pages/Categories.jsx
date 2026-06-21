@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
-import { Check, Plus, Save, Sparkles, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Check, Save, Sparkles, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
+import { useAuth } from "../context/useAuth";
 
 const categoryDetails = {
   technology: {
@@ -57,30 +58,35 @@ const categoryDetails = {
 
 function Categories() {
   const navigate = useNavigate();
+  const { updateUser } = useAuth();
 
   const [categories, setCategories] = useState([]);
   const [selected, setSelected] = useState([]);
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("info");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    loadCategories();
-  }, []);
-
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     try {
+      setMessage("");
       const categoriesResponse = await api.get("/api/news/categories");
       const preferencesResponse = await api.get("/api/user/preferences");
 
       setCategories(categoriesResponse.data.categories || []);
       setSelected(preferencesResponse.data.preferences || []);
     } catch {
+      setMessageType("error");
       setMessage("Categories could not be loaded.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const timeout = setTimeout(loadCategories, 0);
+    return () => clearTimeout(timeout);
+  }, [loadCategories]);
 
   const toggleCategory = (category) => {
     if (selected.includes(category)) {
@@ -97,14 +103,17 @@ function Categories() {
       setSaving(true);
       setMessage("");
 
-      await api.put("/api/user/preferences", {
+      const response = await api.put("/api/user/preferences", {
         preferences: selected,
       });
 
+      updateUser(response.data.user);
+      setMessageType("success");
       setMessage("Your interests have been updated.");
       setTimeout(() => navigate("/"), 800);
-    } catch {
-      setMessage("Preferences could not be saved.");
+    } catch (err) {
+      setMessageType("error");
+      setMessage(err.response?.data?.message || "Preferences could not be saved.");
     } finally {
       setSaving(false);
     }
@@ -133,7 +142,7 @@ function Categories() {
           </button>
         </div>
 
-        {message && <div className="state-box">{message}</div>}
+        {message && <div className={`state-box ${messageType}`}>{message}</div>}
 
         <div className="selected-strip">
           <strong>Selected Interests</strong>
@@ -194,6 +203,10 @@ function Categories() {
             <button onClick={() => setSelected(["general"])}>Reset</button>
           </div>
 
+          <p className="sidebar-note">
+            {selected.length} of {categories.length} categories selected.
+          </p>
+
           <div className="selected-list">
             {selected.map((item) => (
               <div key={item}>
@@ -205,11 +218,6 @@ function Categories() {
               </div>
             ))}
           </div>
-
-          <button className="add-category-btn">
-            <Plus size={16} />
-            Add category
-          </button>
         </div>
 
         <div className="side-card">
@@ -221,8 +229,12 @@ function Categories() {
             selected interests.
           </p>
 
-          <button className="primary-btn full" onClick={savePreferences}>
-            Save and Update Feed
+          <button
+            className="primary-btn full"
+            onClick={savePreferences}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save and Update Feed"}
           </button>
         </div>
 
