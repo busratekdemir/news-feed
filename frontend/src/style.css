@@ -86,7 +86,7 @@ img {
 }
 
 .search-box {
-  width: 330px;
+  width: clamp(220px, 24vw, 330px);
   height: 48px;
   border: 1px solid #e5e7eb;
   background: #f9fafb;
@@ -131,10 +131,55 @@ img {
   gap: 10px;
 }
 
+.profile strong {
+  line-height: 1.15;
+  max-width: 130px;
+  overflow-wrap: anywhere;
+}
+
 .profile img {
   width: 44px;
   height: 44px;
   border-radius: 50%;
+}
+
+.profile-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #0b7cff;
+  color: white;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+}
+
+.nav-auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-auth-btn {
+  min-height: 42px;
+  border: none;
+  background: #0b7cff;
+  color: white;
+  border-radius: 10px;
+  padding: 0 14px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nav-auth-btn.secondary {
+  background: white;
+  color: #0b7cff;
+  border: 1px solid #bfdbfe;
 }
 
 /* Market Ticker */
@@ -260,6 +305,12 @@ img {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.guest-auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .interest-tags {
@@ -844,6 +895,16 @@ img {
   font-weight: 600;
 }
 
+.auth-success {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 12px;
+  font-weight: 600;
+  margin-bottom: 18px;
+}
+
 .auth-link {
   display: block;
   margin-top: 24px;
@@ -876,6 +937,37 @@ img {
   color: #166534;
   background: #f0fdf4;
   border-color: #bbf7d0;
+}
+
+.state-box.info {
+  color: #1e3a8a;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.auth-required-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.auth-required-box div {
+  min-width: 0;
+}
+
+.auth-required-box span {
+  display: block;
+  color: #475569;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.auth-required-box > div:last-child {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
 }
 
 .search-status {
@@ -951,6 +1043,36 @@ img {
 
 /* Responsive */
 @media (max-width: 1280px) {
+  .navbar {
+    gap: 20px;
+    padding: 0 24px;
+  }
+
+  .brand {
+    font-size: 24px;
+    min-width: 180px;
+  }
+
+  .nav-menu {
+    gap: 22px;
+  }
+
+  .nav-right {
+    gap: 10px;
+  }
+
+  .search-box {
+    width: clamp(210px, 22vw, 280px);
+  }
+
+  .profile strong {
+    max-width: 96px;
+  }
+
+  .nav-auth-btn {
+    padding: 0 12px;
+  }
+
   .dashboard-grid {
     grid-template-columns: minmax(0, 1fr) 320px;
     gap: 22px;
@@ -1082,8 +1204,9 @@ img {
   .nav-right {
     order: 3;
     width: 100%;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 42px 44px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 10px;
   }
 
@@ -1199,6 +1322,37 @@ img {
   .profile svg {
     display: none;
   }
+
+  .profile-avatar {
+    height: 40px;
+    width: 40px;
+  }
+
+  .nav-auth-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .nav-auth-btn {
+    min-height: 40px;
+    padding: 0 10px;
+  }
+
+  .guest-auth-actions {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .auth-required-box {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .auth-required-box > div:last-child {
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 420px) {
@@ -1211,7 +1365,6 @@ img {
   }
 
   .nav-right {
-    grid-template-columns: minmax(0, 1fr) 38px 40px;
     gap: 8px;
   }
 

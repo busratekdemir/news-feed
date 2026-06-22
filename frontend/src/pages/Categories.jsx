@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, Save, Sparkles, X } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Check, Lock, Save, Sparkles, X } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import { useAuth } from "../context/useAuth";
 
@@ -56,9 +56,21 @@ const categoryDetails = {
   },
 };
 
+const fallbackCategories = [
+  "business",
+  "entertainment",
+  "general",
+  "health",
+  "science",
+  "sports",
+  "technology",
+];
+
 function Categories() {
   const navigate = useNavigate();
-  const { updateUser } = useAuth();
+  const location = useLocation();
+  const { user, updateUser } = useAuth();
+  const isAuthenticated = Boolean(user);
 
   const [categories, setCategories] = useState([]);
   const [selected, setSelected] = useState([]);
@@ -68,20 +80,37 @@ function Categories() {
   const [saving, setSaving] = useState(false);
 
   const loadCategories = useCallback(async () => {
+    let nextCategories;
+
     try {
       setMessage("");
       const categoriesResponse = await api.get("/api/news/categories");
-      const preferencesResponse = await api.get("/api/user/preferences");
 
-      setCategories(categoriesResponse.data.categories || []);
-      setSelected(preferencesResponse.data.preferences || []);
+      nextCategories = categoriesResponse.data.categories?.length
+        ? categoriesResponse.data.categories
+        : fallbackCategories;
     } catch {
+      nextCategories = fallbackCategories;
+    }
+
+    setCategories(nextCategories);
+
+    if (!isAuthenticated) {
+      setSelected(["general"]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const preferencesResponse = await api.get("/api/user/preferences");
+      setSelected(preferencesResponse.data.preferences || ["general"]);
+    } catch (err) {
       setMessageType("error");
-      setMessage("Categories could not be loaded.");
+      setMessage(err.response?.data?.message || "Preferences could not be loaded.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const timeout = setTimeout(loadCategories, 0);
@@ -89,6 +118,12 @@ function Categories() {
   }, [loadCategories]);
 
   const toggleCategory = (category) => {
+    if (!isAuthenticated) {
+      setMessageType("info");
+      setMessage("Please log in to select and save categories.");
+      return;
+    }
+
     if (selected.includes(category)) {
       if (selected.length === 1) return;
       setSelected(selected.filter((item) => item !== category));
@@ -99,6 +134,12 @@ function Categories() {
   };
 
   const savePreferences = async () => {
+    if (!isAuthenticated) {
+      setMessageType("info");
+      setMessage("Please log in to save your category preferences.");
+      return;
+    }
+
     try {
       setSaving(true);
       setMessage("");
@@ -129,18 +170,47 @@ function Categories() {
         <div className="page-heading">
           <div>
             <h1>Categories</h1>
-            <p>Select your interests to personalize your news feed.</p>
+            <p>
+              {isAuthenticated
+                ? "Select your interests to personalize your news feed."
+                : "Browse available categories. Log in to save your interests."}
+            </p>
           </div>
 
           <button
             className="primary-btn"
             onClick={savePreferences}
-            disabled={saving}
+            disabled={saving || !isAuthenticated}
           >
-            <Save size={17} />
+            {isAuthenticated ? <Save size={17} /> : <Lock size={17} />}
             {saving ? "Saving..." : "Save Interests"}
           </button>
         </div>
+
+        {!isAuthenticated && (
+          <div className="state-box info auth-required-box">
+            <div>
+              <strong>Log in to personalize your feed.</strong>
+              <span>
+                Categories are visible to everyone, but saving interests and
+                updating your personalized feed requires an account.
+              </span>
+            </div>
+
+            <div>
+              <Link
+                to="/login"
+                className="primary-btn"
+                state={{ from: location }}
+              >
+                Log In
+              </Link>
+              <Link to="/register" className="secondary-btn">
+                Sign Up
+              </Link>
+            </div>
+          </div>
+        )}
 
         {message && <div className={`state-box ${messageType}`}>{message}</div>}
 
@@ -182,10 +252,16 @@ function Categories() {
                 <div className="category-body">
                   <h3>{detail.title}</h3>
                   <p>{detail.desc}</p>
-                  <small>{isSelected ? "Selected" : "Click to follow"}</small>
+                  <small>
+                    {isAuthenticated
+                      ? isSelected
+                        ? "Selected"
+                        : "Click to follow"
+                      : "Log in to follow"}
+                  </small>
                 </div>
 
-                {isSelected && (
+                {isAuthenticated && isSelected && (
                   <div className="category-check">
                     <Check size={18} />
                   </div>
@@ -200,19 +276,29 @@ function Categories() {
         <div className="side-card selected-list-card">
           <div className="side-title-row">
             <h3>Selected Categories</h3>
-            <button onClick={() => setSelected(["general"])}>Reset</button>
+            <button
+              onClick={() => setSelected(["general"])}
+              disabled={!isAuthenticated}
+            >
+              Reset
+            </button>
           </div>
 
           <p className="sidebar-note">
-            {selected.length} of {categories.length} categories selected.
+            {isAuthenticated
+              ? `${selected.length} of ${categories.length} categories selected.`
+              : "Log in to choose the categories that shape your feed."}
           </p>
 
           <div className="selected-list">
-            {selected.map((item) => (
+            {(isAuthenticated ? selected : ["general"]).map((item) => (
               <div key={item}>
                 <span>{categoryDetails[item]?.icon}</span>
                 <strong>{categoryDetails[item]?.title || item}</strong>
-                <button onClick={() => toggleCategory(item)}>
+                <button
+                  onClick={() => toggleCategory(item)}
+                  disabled={!isAuthenticated}
+                >
                   <X size={15} />
                 </button>
               </div>
@@ -225,16 +311,21 @@ function Categories() {
             <Sparkles size={19} /> Personalization
           </h3>
           <p>
-            Your homepage and breaking news feed will update based on these
-            selected interests.
+            {isAuthenticated
+              ? "Your homepage and breaking news feed will update based on these selected interests."
+              : "Log in to turn these categories into a personalized homepage and breaking news feed."}
           </p>
 
           <button
             className="primary-btn full"
             onClick={savePreferences}
-            disabled={saving}
+            disabled={saving || !isAuthenticated}
           >
-            {saving ? "Saving..." : "Save and Update Feed"}
+            {saving
+              ? "Saving..."
+              : isAuthenticated
+                ? "Save and Update Feed"
+                : "Log in to Save Interests"}
           </button>
         </div>
 

@@ -1,4 +1,5 @@
 const express = require("express");
+const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
 const authMiddleware = require("../middleware/auth.middleware");
 const {
@@ -29,26 +30,45 @@ function parsePagination(query) {
   return { hasLimit, limit, offset };
 }
 
+function optionalAuthMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    req.user = null;
+    return next();
+  }
+
+  try {
+    req.user = jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET);
+  } catch {
+    req.user = null;
+  }
+
+  return next();
+}
+
 router.get("/categories", (req, res) => {
   res.json({
     categories: allowedCategories,
   });
 });
 
-router.get("/", authMiddleware, async (req, res) => {
+router.get("/", optionalAuthMiddleware, async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        preferences: true,
-      },
-    });
+    const user = req.user
+      ? await prisma.user.findUnique({
+          where: { id: req.user.id },
+          select: {
+            preferences: true,
+          },
+        })
+      : null;
 
-    if (!user) {
+    if (req.user && !user) {
       return res.status(404).json({ message: "User not found." });
     }
 
-    const categories = user.preferences
+    const categories = user?.preferences
       ? user.preferences
           .split(",")
           .map((category) => category.trim())
@@ -63,12 +83,15 @@ router.get("/", authMiddleware, async (req, res) => {
       pages: req.query.pages,
       ts: req.query.ts,
     });
-    const recommendations = await rankArticlesForUser(
-      req.user.id,
-      feed.articles,
-      categories,
-      { refresh }
-    );
+    const recommendations = user
+      ? await rankArticlesForUser(req.user.id, feed.articles, categories, {
+          refresh,
+        })
+      : {
+          articles: feed.articles,
+          sections: null,
+          profile: null,
+        };
     const pagination = parsePagination(req.query);
     const pagedArticles = pagination.hasLimit
       ? recommendations.articles.slice(
@@ -79,7 +102,8 @@ router.get("/", authMiddleware, async (req, res) => {
     const nextOffset = pagination.offset + pagedArticles.length;
 
     return res.json({
-      message: "Personalized news feed loaded.",
+      message: user ? "Personalized news feed loaded." : "News feed loaded.",
+      authenticated: Boolean(user),
       selectedCategories: categories,
       totalResults: recommendations.articles.length,
       refreshed: refresh,

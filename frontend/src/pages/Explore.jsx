@@ -15,6 +15,7 @@ import {
   sortArticlesByPersonalization,
   trackArticleClick,
 } from "../utils/personalization";
+import { useAuth } from "../context/useAuth";
 
 const trends = [
   { tag: "#AI", count: "8.2K" },
@@ -27,6 +28,7 @@ const trends = [
 
 function Explore() {
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
   const [articles, setArticles] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,18 +62,26 @@ function Explore() {
     return () => clearTimeout(timeout);
   }, [loadExplore]);
 
-  const visibleArticles = sortArticlesByPersonalization(
-    filterArticles(articles, searchQuery),
-    categories
-  );
+  const filteredArticles = filterArticles(articles, searchQuery);
+  const visibleArticles = user
+    ? sortArticlesByPersonalization(filteredArticles, categories)
+    : filteredArticles;
   const featured = visibleArticles.slice(0, 3);
   const today = visibleArticles.slice(3, 7);
   const recommended = visibleArticles.slice(7, 10);
 
   const handleArticleOpen = (article) => {
     rememberArticleForDetail(article);
-    trackArticleClick(article);
+
+    if (user) {
+      trackArticleClick(article);
+    }
   };
+
+  const recommendationText = (article) =>
+    user
+      ? getRecommendationReason(article, categories)
+      : "Sign in to personalize recommendations.";
 
   return (
     <div className="dashboard-grid">
@@ -79,7 +89,11 @@ function Explore() {
         <div className="page-heading">
           <div>
             <h1>Explore</h1>
-            <p>Discover trending topics, fresh sources and stories tailored to you.</p>
+            <p>
+              {user
+                ? "Discover trending topics, fresh sources and stories tailored to you."
+                : "Discover trending topics and fresh sources. Sign in for tailored recommendations."}
+            </p>
           </div>
         </div>
 
@@ -109,7 +123,7 @@ function Explore() {
                   <SafeImage src={item.imageUrl} category={item.category} alt={item.title} />
                   <span>{index === 0 ? "TREND" : index === 1 ? "FEATURED" : "RECOMMENDED"}</span>
                   <h2>{item.title}</h2>
-                  <p>{getRecommendationReason(item, categories)}</p>
+                  <p>{recommendationText(item)}</p>
                 </Link>
               ))}
             </div>
@@ -141,7 +155,7 @@ function Explore() {
                     <small>{categoryLabel(item.category)} · {item.source}</small>
                     <h3>{item.title}</h3>
                     <p className="match-text">
-                      {getRecommendationReason(item, categories)}
+                      {recommendationText(item)}
                     </p>
                   </div>
                 </Link>
@@ -163,7 +177,7 @@ function Explore() {
                     <small>{categoryLabel(item.category)}</small>
                     <strong>{item.title}</strong>
                     <p className="match-text compact">
-                      {getRecommendationReason(item, categories)}
+                      {recommendationText(item)}
                     </p>
                   </div>
                 </Link>
@@ -193,10 +207,17 @@ function Explore() {
         </div>
 
         <div className="side-card">
-          <h3><Sparkles size={19} /> Your Discovery Profile</h3>
-          <p>Your explore page is shaped by:</p>
+          <h3>
+            <Sparkles size={19} />{" "}
+            {user ? "Your Discovery Profile" : "Discovery Profile"}
+          </h3>
+          <p>
+            {user
+              ? "Your explore page is shaped by:"
+              : "Sign in to shape Explore around your interests."}
+          </p>
           <div className="source-list">
-            {categories.map((cat) => (
+            {(user ? categories : ["general", "business", "technology"]).map((cat) => (
               <span key={cat}>{categoryLabel(cat)}</span>
             ))}
           </div>

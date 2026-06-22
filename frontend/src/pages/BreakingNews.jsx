@@ -13,9 +13,11 @@ import {
   sortArticlesByPersonalization,
   trackArticleClick,
 } from "../utils/personalization";
+import { useAuth } from "../context/useAuth";
 
 function BreakingNews() {
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
   const [articles, setArticles] = useState([]);
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,17 +64,20 @@ function BreakingNews() {
     };
   }, [loadBreakingNews]);
 
-  const visibleArticles = sortArticlesByPersonalization(
-    filterArticles(articles, searchQuery),
-    selectedCategories
-  );
+  const filteredArticles = filterArticles(articles, searchQuery);
+  const visibleArticles = user
+    ? sortArticlesByPersonalization(filteredArticles, selectedCategories)
+    : filteredArticles;
   const main = visibleArticles[0];
   const timeline = visibleArticles.slice(1, 5);
   const mostRead = visibleArticles.slice(5, 10);
 
   const handleArticleOpen = (article) => {
     rememberArticleForDetail(article);
-    trackArticleClick(article);
+
+    if (user) {
+      trackArticleClick(article);
+    }
   };
 
   if (loading) return <div className="state-box">Loading breaking news...</div>;
@@ -83,7 +88,11 @@ function BreakingNews() {
         <div className="page-heading">
           <div>
             <h1>Breaking News</h1>
-            <p>Follow updates from your locally cached personalized news stream.</p>
+            <p>
+              {user
+                ? "Follow updates from your locally cached personalized news stream."
+                : "Follow the latest cached headlines. Sign in for a personalized stream."}
+            </p>
           </div>
 
           <button
@@ -180,7 +189,11 @@ function BreakingNews() {
 
         <div className="side-card">
           <h3>Daily Brief</h3>
-          <p>Breaking stories are filtered according to your selected interests.</p>
+          <p>
+            {user
+              ? "Breaking stories are filtered according to your selected interests."
+              : "Breaking stories use the general feed until you sign in."}
+          </p>
         </div>
       </aside>
     </div>

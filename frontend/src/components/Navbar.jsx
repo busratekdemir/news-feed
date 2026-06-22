@@ -1,10 +1,12 @@
-import { ChevronDown, Search, Newspaper, Bookmark } from "lucide-react";
+import { LogIn, LogOut, Search, Newspaper, Bookmark, UserPlus } from "lucide-react";
 import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
+import { useAuth } from "../context/useAuth";
 
 function Navbar() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { user, logout } = useAuth();
   const [query, setQuery] = useState(searchParams.get("q") || "");
 
   const handleSearch = (event) => {
@@ -19,6 +21,14 @@ function Navbar() {
 
     navigate(`/?q=${encodeURIComponent(trimmed)}`);
   };
+
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
+
+  const displayName = user?.name || user?.email || "User";
+  const initial = displayName.trim().charAt(0).toUpperCase() || "U";
 
   return (
     <header className="navbar">
@@ -48,23 +58,45 @@ function Navbar() {
           />
         </form>
 
-        <Link
-          to="/saved"
-          className="notification"
-          title="Saved news"
-          aria-label="Saved news"
-        >
-          <Bookmark size={21} />
-        </Link>
+        {user ? (
+          <>
+            <Link
+              to="/saved"
+              className="notification"
+              title="Saved news"
+              aria-label="Saved news"
+            >
+              <Bookmark size={21} />
+            </Link>
 
-        <div className="profile">
-          <img
-            src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&h=80&fit=crop"
-            alt="Profile"
-          />
-          <strong>Büşra</strong>
-          <ChevronDown size={16} />
-        </div>
+            <div className="profile">
+              <span className="profile-avatar" aria-hidden="true">
+                {initial}
+              </span>
+              <strong>{displayName}</strong>
+            </div>
+
+            <button
+              className="nav-auth-btn secondary"
+              type="button"
+              onClick={handleLogout}
+            >
+              <LogOut size={17} />
+              Log Out
+            </button>
+          </>
+        ) : (
+          <div className="nav-auth-actions">
+            <Link to="/login" className="nav-auth-btn secondary">
+              <LogIn size={17} />
+              Log In
+            </Link>
+            <Link to="/register" className="nav-auth-btn">
+              <UserPlus size={17} />
+              Sign Up
+            </Link>
+          </div>
+        )}
       </div>
     </header>
   );

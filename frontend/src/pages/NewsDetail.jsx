@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Bookmark, ExternalLink, Sparkles, TrendingUp } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../api/api";
 import {
   articlePath,
@@ -20,6 +20,7 @@ import {
   recordInteraction,
   trackArticleClick,
 } from "../utils/personalization";
+import { useAuth } from "../context/useAuth";
 
 function readSelectedArticle(routeId) {
   try {
@@ -59,6 +60,9 @@ function calculateReadingTime(article) {
 
 function NewsDetail() {
   const { id } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [articles, setArticles] = useState([]);
   const [article, setArticle] = useState(null);
@@ -141,7 +145,7 @@ function NewsDetail() {
   }, [loadArticle]);
 
   useEffect(() => {
-    if (!article || trackedViewRef.current === article.id) return undefined;
+    if (!user || !article || trackedViewRef.current === article.id) return undefined;
 
     trackedViewRef.current = article.id;
 
@@ -176,7 +180,7 @@ function NewsDetail() {
         scrollPercentage: Math.round(maxScrollRef.current),
       });
     };
-  }, [article]);
+  }, [article, user]);
 
   if (loading) return <div className="state-box">Loading article...</div>;
   if (error) return <div className="state-box error">{error}</div>;
@@ -208,8 +212,16 @@ function NewsDetail() {
   const articleText = cleanArticleText(article);
   const readingTime = calculateReadingTime(article);
   const matchScore = getMatchScore(article, selectedCategories);
+  const recommendationText = user
+    ? getRecommendationReason(article, selectedCategories)
+    : "Sign in to personalize recommendations like this.";
 
   const handleBookmark = () => {
+    if (!user) {
+      navigate("/login", { state: { from: location } });
+      return;
+    }
+
     setBookmarks(toggleBookmark(article));
 
     recordInteraction(article, {
@@ -221,7 +233,9 @@ function NewsDetail() {
   const handleArticleOpen = (item) => {
     rememberArticleForDetail(item);
 
-    trackArticleClick(item);
+    if (user) {
+      trackArticleClick(item);
+    }
   };
 
   return (
@@ -253,7 +267,7 @@ function NewsDetail() {
             onClick={handleBookmark}
           >
             <Bookmark size={17} />
-            {saved ? "Saved" : "Save"}
+            {user ? (saved ? "Saved" : "Save") : "Log in to save"}
           </button>
 
           {article.url && (
@@ -269,8 +283,10 @@ function NewsDetail() {
         <p className="article-summary">{articleText}</p>
 
         <div className="recommendation-box">
-          <strong>Personalized recommendation</strong>
-          <p>{getRecommendationReason(article, selectedCategories)}</p>
+          <strong>
+            {user ? "Personalized recommendation" : "Member recommendation"}
+          </strong>
+          <p>{recommendationText}</p>
         </div>
 
         <div className="article-tags">
@@ -296,7 +312,9 @@ function NewsDetail() {
                 <h3>{item.title}</h3>
                 <p className="match-text">
                   {getMatchScore(item, selectedCategories)}% match ·{" "}
-                  {getRecommendationReason(item, selectedCategories)}
+                  {user
+                    ? getRecommendationReason(item, selectedCategories)
+                    : "Sign in for personalized context."}
                 </p>
               </div>
             </Link>
@@ -311,9 +329,21 @@ function NewsDetail() {
           </h3>
 
           <ul className="quick-summary">
-            <li>This story was opened from your personalized news feed.</li>
-            <li>Reading duration and scroll depth improve future recommendations.</li>
-            <li>Your session is protected with JWT authentication.</li>
+            <li>
+              {user
+                ? "This story was opened from your personalized news feed."
+                : "This story was opened from the public news feed."}
+            </li>
+            <li>
+              {user
+                ? "Reading duration and scroll depth improve future recommendations."
+                : "Sign in to save stories and improve future recommendations."}
+            </li>
+            <li>
+              {user
+                ? "Your session is protected with JWT authentication."
+                : "News remains readable without an account."}
+            </li>
           </ul>
         </div>
 

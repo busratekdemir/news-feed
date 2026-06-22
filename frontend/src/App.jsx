@@ -25,16 +25,21 @@ function App() {
           <Route
             path="/"
             element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
+              <Layout />
             }
           >
             <Route index element={<Home />} />
             <Route path="categories" element={<Categories />} />
             <Route path="breaking" element={<BreakingNews />} />
             <Route path="explore" element={<Explore />} />
-            <Route path="saved" element={<SavedNews />} />
+            <Route
+              path="saved"
+              element={
+                <ProtectedRoute>
+                  <SavedNews />
+                </ProtectedRoute>
+              }
+            />
             <Route path="news/:id" element={<NewsDetail />} />
           </Route>
         </Routes>

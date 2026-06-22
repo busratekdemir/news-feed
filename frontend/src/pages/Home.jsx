@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Bookmark,
   Check,
@@ -28,12 +28,16 @@ import {
   sortArticlesByPersonalization,
   trackArticleClick,
 } from "../utils/personalization";
+import { useAuth } from "../context/useAuth";
 
 const INITIAL_NEWS_LIMIT = 12;
 const NEWS_BATCH_SIZE = 10;
 
 function Home() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [articles, setArticles] = useState([]);
   const [sections, setSections] = useState(null);
   const [selectedCategories, setSelectedCategories] = useState([]);
@@ -48,6 +52,7 @@ function Home() {
   const [error, setError] = useState("");
 
   const searchQuery = searchParams.get("q") || "";
+  const isAuthenticated = Boolean(user);
 
   const fetchNews = useCallback(async ({ refresh = false } = {}) => {
     try {
@@ -126,10 +131,10 @@ function Home() {
     }
   };
 
-  const visibleArticles = sortArticlesByPersonalization(
-    filterArticles(articles, searchQuery),
-    selectedCategories
-  );
+  const filteredArticles = filterArticles(articles, searchQuery);
+  const visibleArticles = isAuthenticated
+    ? sortArticlesByPersonalization(filteredArticles, selectedCategories)
+    : filteredArticles;
 
   const personalizedArticles = visibleArticles;
   const hasMorePersonalized = Boolean(pagination?.hasMore);
@@ -139,15 +144,17 @@ function Home() {
     searchQuery
   );
 
-  const keywordDiscovery = buildKeywordDiscoverySection(visibleArticles, {
-    limit: 6,
-  });
+  const keywordDiscovery = isAuthenticated
+    ? buildKeywordDiscoverySection(visibleArticles, {
+        limit: 6,
+      })
+    : null;
 
   const becauseYouRead = {
     label:
       keywordDiscovery?.label ||
       sections?.becauseYouRead?.label ||
-      "Because You Read",
+      (isAuthenticated ? "Because You Read" : "More Headlines"),
     articles:
       keywordDiscovery?.articles ||
       filterArticles(
@@ -174,6 +181,11 @@ function Home() {
     event.preventDefault();
     event.stopPropagation();
 
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: location } });
+      return;
+    }
+
     setBookmarks(toggleBookmark(article));
 
     recordInteraction(article, {
@@ -187,6 +199,10 @@ function Home() {
   const handleArticleOpen = (article) => {
     rememberArticleForDetail(article);
 
+    if (!isAuthenticated) {
+      return;
+    }
+
     trackArticleClick(article).then((profile) => {
       if (profile) setReadingProfile(getReadingProfile());
     });
@@ -195,7 +211,9 @@ function Home() {
   };
 
   const recommendationText = (article) =>
-    getRecommendationReason(article, selectedCategories);
+    isAuthenticated
+      ? getRecommendationReason(article, selectedCategories)
+      : "Sign in to personalize stories like this.";
 
   const favoriteCategories = getTopProfileItems(
     readingProfile.categoryWeights,
@@ -208,29 +226,50 @@ function Home() {
       <section className="main-content">
         <div className="interest-panel">
           <div>
-            <h3>Your Interests</h3>
+            <h3>{isAuthenticated ? "Your Interests" : "Top Headlines"}</h3>
             <p>
-              Your news feed is personalized based on your selected interests.
+              {isAuthenticated
+                ? "Your news feed is personalized based on your selected interests."
+                : "Read the latest stories now. Sign in to personalize your feed."}
             </p>
           </div>
 
-          <Link to="/categories" className="edit-btn">
-            <SlidersHorizontal size={17} />
-            Edit Interests
-          </Link>
+          {isAuthenticated ? (
+            <Link to="/categories" className="edit-btn">
+              <SlidersHorizontal size={17} />
+              Edit Interests
+            </Link>
+          ) : (
+            <div className="guest-auth-actions">
+              <Link
+                to="/login"
+                className="edit-btn"
+                state={{ from: location }}
+              >
+                Log In
+              </Link>
+              <Link to="/register" className="primary-btn">
+                Sign Up
+              </Link>
+            </div>
+          )}
 
           <div className="interest-tags">
-            {selectedCategories.map((tag, index) => (
-              <span className={index === 0 ? "active" : ""} key={tag}>
-                {categoryLabel(tag)}
-                <Check size={15} />
-              </span>
-            ))}
+            {(isAuthenticated ? selectedCategories : ["general"]).map(
+              (tag, index) => (
+                <span className={index === 0 ? "active" : ""} key={tag}>
+                  {categoryLabel(tag)}
+                  <Check size={15} />
+                </span>
+              )
+            )}
           </div>
         </div>
 
         <div className="section-heading-row">
-          <SectionTitle title="Personalized For You" />
+          <SectionTitle
+            title={isAuthenticated ? "Personalized For You" : "Latest Headlines"}
+          />
 
           <button
             className="secondary-btn"
@@ -429,33 +468,43 @@ function Home() {
 
         <div className="side-card saved-card">
           <h3>
-            <Bookmark size={19} /> Personalization Info
+            <Bookmark size={19} />{" "}
+            {isAuthenticated ? "Personalization Info" : "Member Features"}
           </h3>
           <p>
-            This feed learns from article clicks, keywords, sources, and your
-            selected interests while NewsAPI requests stay protected by the
-            backend cache.
+            {isAuthenticated
+              ? "This feed learns from article clicks, keywords, sources, and your selected interests while NewsAPI requests stay protected by the backend cache."
+              : "Create an account to save stories, choose categories, and get a personalized feed."}
           </p>
-          <small>
-            Articles read: {readingProfile.totalReads || 0}
-          </small>
+          {isAuthenticated ? (
+            <small>Articles read: {readingProfile.totalReads || 0}</small>
+          ) : (
+            <Link to="/register" className="primary-btn small">
+              Sign Up
+            </Link>
+          )}
         </div>
 
         <div className="side-card sidebar-topics">
           <h3>
-            <Check size={19} /> Your Topics
+            <Check size={19} /> {isAuthenticated ? "Your Topics" : "General Topics"}
           </h3>
 
           <div className="interest-keywords">
-            {(favoriteCategories.length ? favoriteCategories : selectedCategories)
+            {(isAuthenticated && favoriteCategories.length
+              ? favoriteCategories
+              : isAuthenticated
+                ? selectedCategories
+                : ["general", "business", "technology", "sports", "health"])
               .slice(0, 5)
               .map((category) => (
                 <span key={category}>{categoryLabel(category)}</span>
               ))}
 
-            {favoriteKeywords.slice(0, 4).map((keyword) => (
-              <span key={keyword}>{formatProfileKeyword(keyword)}</span>
-            ))}
+            {isAuthenticated &&
+              favoriteKeywords.slice(0, 4).map((keyword) => (
+                <span key={keyword}>{formatProfileKeyword(keyword)}</span>
+              ))}
           </div>
         </div>
 

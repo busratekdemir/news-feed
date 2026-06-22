@@ -472,6 +472,7 @@ export function getMatchScore(article, selectedInterests = []) {
 
 export async function recordInteraction(article, event = {}) {
   if (!article?.id) return null;
+  if (!localStorage.getItem("token")) return null;
 
   try {
     const response = await api.post("/api/news/interactions", {

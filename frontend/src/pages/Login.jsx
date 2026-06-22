@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Newspaper } from "lucide-react";
 import { useAuth } from "../context/useAuth";
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
+  const from = location.state?.from?.pathname || "/";
 
   const [form, setForm] = useState({
     email: "",
@@ -29,7 +31,7 @@ function Login() {
 
     try {
       await login(form.email, form.password);
-      navigate("/");
+      navigate(from, { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || "Login failed.");
     } finally {
@@ -49,6 +51,12 @@ function Login() {
 
         <h2>Sign in to your account</h2>
         <p>Continue to your personalized news feed.</p>
+
+        {location.state?.registered && (
+          <div className="auth-success">
+            Account created. Please sign in to continue.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="auth-form">
           <label>
