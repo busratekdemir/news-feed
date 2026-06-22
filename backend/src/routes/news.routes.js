@@ -12,6 +12,22 @@ const {
 
 const router = express.Router();
 const prisma = new PrismaClient();
+const MAX_RESPONSE_LIMIT = 48;
+
+function parsePagination(query) {
+  const requestedLimit = Number(query.limit);
+  const requestedOffset = Number(query.offset);
+  const hasLimit = Number.isFinite(requestedLimit) && requestedLimit > 0;
+  const limit = hasLimit
+    ? Math.min(Math.floor(requestedLimit), MAX_RESPONSE_LIMIT)
+    : null;
+  const offset =
+    Number.isFinite(requestedOffset) && requestedOffset > 0
+      ? Math.floor(requestedOffset)
+      : 0;
+
+  return { hasLimit, limit, offset };
+}
 
 router.get("/categories", (req, res) => {
   res.json({
@@ -53,15 +69,31 @@ router.get("/", authMiddleware, async (req, res) => {
       categories,
       { refresh }
     );
+    const pagination = parsePagination(req.query);
+    const pagedArticles = pagination.hasLimit
+      ? recommendations.articles.slice(
+          pagination.offset,
+          pagination.offset + pagination.limit
+        )
+      : recommendations.articles;
+    const nextOffset = pagination.offset + pagedArticles.length;
 
     return res.json({
       message: "Personalized news feed loaded.",
       selectedCategories: categories,
       totalResults: recommendations.articles.length,
       refreshed: refresh,
-      articles: recommendations.articles,
+      articles: pagedArticles,
       sections: recommendations.sections,
       profile: recommendations.profile,
+      pagination: {
+        offset: pagination.offset,
+        limit: pagination.limit || recommendations.articles.length,
+        count: pagedArticles.length,
+        total: recommendations.articles.length,
+        nextOffset,
+        hasMore: nextOffset < recommendations.articles.length,
+      },
       fetchMeta: feed.meta,
     });
   } catch (error) {

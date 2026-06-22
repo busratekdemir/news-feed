@@ -37,7 +37,12 @@ function Explore() {
     try {
       setLoading(true);
       setError("");
-      const response = await api.get("/api/news");
+      const response = await api.get("/api/news", {
+        params: {
+          offset: 0,
+          limit: 24,
+        },
+      });
       const fetchedArticles = response.data.articles || [];
 
       rememberArticlesForDetail(fetchedArticles);

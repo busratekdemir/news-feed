@@ -29,6 +29,9 @@ import {
   trackArticleClick,
 } from "../utils/personalization";
 
+const INITIAL_NEWS_LIMIT = 12;
+const NEWS_BATCH_SIZE = 10;
+
 function Home() {
   const [searchParams] = useSearchParams();
   const [articles, setArticles] = useState([]);
@@ -38,8 +41,9 @@ function Home() {
   const [readingProfile, setReadingProfile] = useState(() =>
     getReadingProfile()
   );
-  const [displayCount, setDisplayCount] = useState(24);
+  const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
@@ -51,14 +55,21 @@ function Home() {
         setRefreshing(true);
         setArticles([]);
         setSections(null);
-        setDisplayCount(24);
+        setPagination(null);
       } else {
         setLoading(true);
       }
 
       setError("");
 
-      const response = await api.get("/api/news");
+      const response = await api.get("/api/news", {
+        params: {
+          offset: 0,
+          limit: INITIAL_NEWS_LIMIT,
+          refresh: refresh ? "true" : undefined,
+          ts: refresh ? Date.now() : undefined,
+        },
+      });
 
       const fetchedArticles = response.data.articles || [];
 
@@ -66,6 +77,7 @@ function Home() {
       setArticles(fetchedArticles);
       setSections(response.data.sections || null);
       setSelectedCategories(response.data.selectedCategories || []);
+      setPagination(response.data.pagination || null);
       setReadingProfile(getReadingProfile());
     } catch (err) {
       setError(err.response?.data?.message || "News could not be loaded.");
@@ -80,36 +92,47 @@ function Home() {
     return () => clearTimeout(timeout);
   }, [fetchNews]);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      const nearBottom =
-        window.innerHeight + window.scrollY >=
-        document.documentElement.scrollHeight - 700;
+  const loadMoreNews = async () => {
+    if (loadingMore || !pagination?.hasMore) return;
 
-      if (nearBottom) {
-        setDisplayCount((count) => Math.min(count + 12, articles.length));
-      }
-    };
+    try {
+      setLoadingMore(true);
+      setError("");
 
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [articles.length]);
+      const response = await api.get("/api/news", {
+        params: {
+          offset: pagination.nextOffset ?? articles.length,
+          limit: NEWS_BATCH_SIZE,
+        },
+      });
+      const fetchedArticles = response.data.articles || [];
+
+      rememberArticlesForDetail(fetchedArticles);
+      setArticles((currentArticles) => {
+        const existingIds = new Set(currentArticles.map((article) => article.id));
+        const nextArticles = fetchedArticles.filter(
+          (article) => !existingIds.has(article.id)
+        );
+
+        return [...currentArticles, ...nextArticles];
+      });
+      setSections(response.data.sections || sections);
+      setSelectedCategories(response.data.selectedCategories || selectedCategories);
+      setPagination(response.data.pagination || null);
+    } catch (err) {
+      setError(err.response?.data?.message || "More news could not be loaded.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const visibleArticles = sortArticlesByPersonalization(
     filterArticles(articles, searchQuery),
     selectedCategories
   );
 
-  const personalizedBase = sections?.personalized?.length
-    ? sections.personalized
-    : visibleArticles;
-
-  const personalizedArticles = sortArticlesByPersonalization(
-    filterArticles(personalizedBase, searchQuery),
-    selectedCategories
-  );
-
-  const mainArticles = personalizedArticles.slice(0, displayCount);
+  const personalizedArticles = visibleArticles;
+  const hasMorePersonalized = Boolean(pagination?.hasMore);
 
   const trendArticles = filterArticles(
     sections?.trending || visibleArticles.slice(0, 8),
@@ -238,75 +261,57 @@ function Home() {
               <div className="state-box">No stories match your search.</div>
             )}
 
-            <div className="popular-grid">
-              {mainArticles.map((news) => (
-                <Link
-                  to={articlePath(news)}
-                  className="popular-card"
-                  key={news.id}
-                  onClick={() => handleArticleOpen(news)}
-                >
-                  <SafeImage
-                    src={news.imageUrl}
-                    category={news.category}
-                    alt={news.title}
-                  />
+            {personalizedArticles.length > 0 && (
+              <>
+                <div className="news-catalog-grid">
+                  {personalizedArticles.map((news, index) =>
+                    index === 0 && !searchQuery ? (
+                      <FeatureStoryCard
+                        key={news.id}
+                        news={news}
+                        bookmarks={bookmarks}
+                        onArticleOpen={handleArticleOpen}
+                        onBookmark={handleBookmark}
+                        recommendationText={recommendationText(news)}
+                      />
+                    ) : (
+                      <NewsListCard
+                        key={news.id}
+                        news={news}
+                        bookmarks={bookmarks}
+                        onArticleOpen={handleArticleOpen}
+                        onBookmark={handleBookmark}
+                        recommendationText={recommendationText(news)}
+                      />
+                    )
+                  )}
+                </div>
 
-                  <button
-                    className={`bookmark ${
-                      isBookmarked(news.id, bookmarks) ? "saved" : ""
-                    }`}
-                    type="button"
-                    onClick={(event) => handleBookmark(event, news)}
-                    aria-label={
-                      isBookmarked(news.id, bookmarks)
-                        ? "Remove bookmark"
-                        : "Save bookmark"
-                    }
-                  >
-                    <Bookmark size={18} />
-                  </button>
-
-                  <div>
-                    <small>
-                      {categoryLabel(news.category)} ·{" "}
-                      {formatDate(news.publishedAt)}
-                    </small>
-
-                    <h3>{news.title}</h3>
-
-                    <p className="match-text">{recommendationText(news)}</p>
+                {hasMorePersonalized && (
+                  <div className="load-more-wrap">
+                    <button
+                      className="primary-btn"
+                      type="button"
+                      onClick={loadMoreNews}
+                      disabled={loadingMore}
+                    >
+                      {loadingMore ? "Loading..." : `Show ${NEWS_BATCH_SIZE} more news`}
+                    </button>
                   </div>
-                </Link>
-              ))}
-            </div>
+                )}
+              </>
+            )}
 
             <SectionTitle title="Trending" />
 
-            <div className="hot-row">
-              {trendArticles.slice(0, 8).map((news) => (
-                <Link
-                  to={articlePath(news)}
-                  className="hot-card"
+            <div className="compact-news-grid">
+              {trendArticles.map((news) => (
+                <CompactNewsCard
                   key={news.id}
-                  onClick={() => handleArticleOpen(news)}
-                >
-                  <SafeImage
-                    src={news.imageUrl}
-                    category={news.category}
-                    alt={news.title}
-                  />
-
-                  <div>
-                    <small>
-                      {categoryLabel(news.category)} · {news.source}
-                    </small>
-                    <strong>{news.title}</strong>
-                    <p className="match-text compact">
-                      {recommendationText(news)}
-                    </p>
-                  </div>
-                </Link>
+                  news={news}
+                  onArticleOpen={handleArticleOpen}
+                  recommendationText={recommendationText(news)}
+                />
               ))}
             </div>
 
@@ -368,30 +373,14 @@ function Home() {
 
             <SectionTitle title="Readers Like You" />
 
-            <div className="hot-row">
+            <div className="compact-news-grid">
               {readersLikeYou.slice(0, 8).map((news) => (
-                <Link
-                  to={articlePath(news)}
-                  className="hot-card"
+                <CompactNewsCard
                   key={news.id}
-                  onClick={() => handleArticleOpen(news)}
-                >
-                  <SafeImage
-                    src={news.imageUrl}
-                    category={news.category}
-                    alt={news.title}
-                  />
-
-                  <div>
-                    <small>
-                      {categoryLabel(news.category)} · {news.source}
-                    </small>
-                    <strong>{news.title}</strong>
-                    <p className="match-text compact">
-                      {recommendationText(news)}
-                    </p>
-                  </div>
-                </Link>
+                  news={news}
+                  onArticleOpen={handleArticleOpen}
+                  recommendationText={recommendationText(news)}
+                />
               ))}
             </div>
 
@@ -399,45 +388,23 @@ function Home() {
 
             <div className="popular-grid">
               {discoveryArticles.slice(0, 8).map((news) => (
-                <Link
-                  to={articlePath(news)}
-                  className="popular-card"
+                <NewsTile
                   key={news.id}
-                  onClick={() => handleArticleOpen(news)}
-                >
-                  <SafeImage
-                    src={news.imageUrl}
-                    category={news.category}
-                    alt={news.title}
-                  />
-
-                  <div>
-                    <small>
-                      {categoryLabel(news.category)} · {news.source}
-                    </small>
-                    <h3>{news.title}</h3>
-                    <p className="match-text">{recommendationText(news)}</p>
-                  </div>
-                </Link>
+                  news={news}
+                  bookmarks={bookmarks}
+                  onArticleOpen={handleArticleOpen}
+                  onBookmark={handleBookmark}
+                  recommendationText={recommendationText(news)}
+                />
               ))}
             </div>
 
-            {displayCount < personalizedArticles.length && (
-              <div className="load-more-wrap">
-                <button
-                  className="primary-btn"
-                  type="button"
-                  onClick={() => setDisplayCount((count) => count + 12)}
-                >
-                  Load More
-                </button>
-              </div>
-            )}
           </>
         )}
       </section>
 
       <aside className="right-sidebar">
+        <div className="right-sidebar-inner">
         <div className="side-card">
           <h3>
             <TrendingUp size={19} /> Trending News
@@ -473,8 +440,211 @@ function Home() {
             Articles read: {readingProfile.totalReads || 0}
           </small>
         </div>
+
+        <div className="side-card sidebar-topics">
+          <h3>
+            <Check size={19} /> Your Topics
+          </h3>
+
+          <div className="interest-keywords">
+            {(favoriteCategories.length ? favoriteCategories : selectedCategories)
+              .slice(0, 5)
+              .map((category) => (
+                <span key={category}>{categoryLabel(category)}</span>
+              ))}
+
+            {favoriteKeywords.slice(0, 4).map((keyword) => (
+              <span key={keyword}>{formatProfileKeyword(keyword)}</span>
+            ))}
+          </div>
+        </div>
+
+        <div className="side-card sidebar-brief">
+          <h3>Latest in Your Feed</h3>
+
+          {personalizedArticles.slice(1, 3).map((item) => (
+            <Link
+              to={articlePath(item)}
+              className="sidebar-brief-item"
+              key={item.id}
+              onClick={() => handleArticleOpen(item)}
+            >
+              <SafeImage
+                src={item.imageUrl}
+                category={item.category}
+                alt={item.title}
+              />
+              <div>
+                <small>{categoryLabel(item.category)}</small>
+                <strong>{item.title}</strong>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        <div className="side-card sidebar-brief">
+          <h3>Discover Picks</h3>
+
+          {discoveryArticles.slice(0, 2).map((item) => (
+            <Link
+              to={articlePath(item)}
+              className="sidebar-brief-item"
+              key={item.id}
+              onClick={() => handleArticleOpen(item)}
+            >
+              <SafeImage
+                src={item.imageUrl}
+                category={item.category}
+                alt={item.title}
+              />
+              <div>
+                <small>{item.source}</small>
+                <strong>{item.title}</strong>
+              </div>
+            </Link>
+          ))}
+        </div>
+        </div>
       </aside>
     </div>
+  );
+}
+
+function NewsTile({
+  news,
+  bookmarks,
+  onArticleOpen,
+  onBookmark,
+  recommendationText,
+}) {
+  return (
+    <Link
+      to={articlePath(news)}
+      className="popular-card"
+      onClick={() => onArticleOpen(news)}
+    >
+      <SafeImage
+        src={news.imageUrl}
+        category={news.category}
+        alt={news.title}
+      />
+
+      <BookmarkButton news={news} bookmarks={bookmarks} onBookmark={onBookmark} />
+
+      <div>
+        <small>
+          {categoryLabel(news.category)} · {formatDate(news.publishedAt)}
+        </small>
+
+        <h3>{news.title}</h3>
+
+        <p className="match-text">{recommendationText}</p>
+      </div>
+    </Link>
+  );
+}
+
+function FeatureStoryCard({
+  news,
+  bookmarks,
+  onArticleOpen,
+  onBookmark,
+  recommendationText,
+}) {
+  return (
+    <Link
+      to={articlePath(news)}
+      className="feature-story-card"
+      onClick={() => onArticleOpen(news)}
+    >
+      <SafeImage
+        src={news.imageUrl}
+        category={news.category}
+        alt={news.title}
+      />
+
+      <BookmarkButton news={news} bookmarks={bookmarks} onBookmark={onBookmark} />
+
+      <div>
+        <small>
+          {categoryLabel(news.category)} · {formatDate(news.publishedAt)}
+        </small>
+        <h3>{news.title}</h3>
+        <p>{news.description || recommendationText}</p>
+        <span className="match-text">{recommendationText}</span>
+      </div>
+    </Link>
+  );
+}
+
+function NewsListCard({
+  news,
+  bookmarks,
+  onArticleOpen,
+  onBookmark,
+  recommendationText,
+}) {
+  return (
+    <Link
+      to={articlePath(news)}
+      className="news-list-card"
+      onClick={() => onArticleOpen(news)}
+    >
+      <SafeImage
+        src={news.imageUrl}
+        category={news.category}
+        alt={news.title}
+      />
+
+      <BookmarkButton news={news} bookmarks={bookmarks} onBookmark={onBookmark} />
+
+      <div>
+        <small>
+          {categoryLabel(news.category)} · {formatDate(news.publishedAt)}
+        </small>
+        <h3>{news.title}</h3>
+        <p className="match-text compact">{recommendationText}</p>
+      </div>
+    </Link>
+  );
+}
+
+function CompactNewsCard({ news, onArticleOpen, recommendationText }) {
+  return (
+    <Link
+      to={articlePath(news)}
+      className="compact-news-card"
+      onClick={() => onArticleOpen(news)}
+    >
+      <SafeImage
+        src={news.imageUrl}
+        category={news.category}
+        alt={news.title}
+      />
+
+      <div>
+        <small>
+          {categoryLabel(news.category)} · {news.source}
+        </small>
+        <strong>{news.title}</strong>
+        <p className="match-text compact">{recommendationText}</p>
+      </div>
+    </Link>
+  );
+}
+
+function BookmarkButton({ news, bookmarks, onBookmark }) {
+  const saved = isBookmarked(news.id, bookmarks);
+
+  return (
+    <button
+      className={`bookmark ${saved ? "saved" : ""}`}
+      type="button"
+      onClick={(event) => onBookmark(event, news)}
+      aria-label={saved ? "Remove bookmark" : "Save bookmark"}
+    >
+      <Bookmark size={18} />
+    </button>
   );
 }
 

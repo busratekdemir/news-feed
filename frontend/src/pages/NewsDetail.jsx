@@ -80,7 +80,12 @@ function NewsDetail() {
       setError("");
 
       try {
-        const response = await api.get("/api/news");
+        const response = await api.get("/api/news", {
+          params: {
+            offset: 0,
+            limit: 24,
+          },
+        });
         const list = response.data.articles || [];
 
         rememberArticlesForDetail(list);
@@ -97,7 +102,12 @@ function NewsDetail() {
       setLoading(true);
       setError("");
 
-      const response = await api.get("/api/news");
+      const response = await api.get("/api/news", {
+        params: {
+          offset: 0,
+          limit: 36,
+        },
+      });
       const list = response.data.articles || [];
 
       rememberArticlesForDetail(list);
