@@ -32,6 +32,88 @@ import { useAuth } from "../context/useAuth";
 
 const INITIAL_NEWS_LIMIT = 12;
 const NEWS_BATCH_SIZE = 10;
+const FALLBACK_ARTICLES = [
+  {
+    id: "fallback-general-global-brief",
+    category: "general",
+    title: "Global headlines remain available while the live feed reconnects",
+    description:
+      "A short news brief is shown here so the homepage stays useful even when the live feed is temporarily unavailable.",
+    source: "NewsFeed Brief",
+    imageUrl: "",
+    publishedAt: new Date().toISOString(),
+  },
+  {
+    id: "fallback-technology-ai",
+    category: "technology",
+    title: "Technology teams keep watch on AI tools and platform shifts",
+    description:
+      "Explore technology coverage from the cached feed once the backend news service responds again.",
+    source: "NewsFeed Brief",
+    imageUrl: "",
+    publishedAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+  },
+  {
+    id: "fallback-business-markets",
+    category: "business",
+    title: "Markets and business updates are ready for your next refresh",
+    description:
+      "Business stories will return here automatically as soon as stored news data is available.",
+    source: "NewsFeed Brief",
+    imageUrl: "",
+    publishedAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+  },
+  {
+    id: "fallback-health-research",
+    category: "health",
+    title: "Health research and public wellness stories are part of discovery",
+    description:
+      "Use categories after signing in to keep health coverage in your personalized feed.",
+    source: "NewsFeed Brief",
+    imageUrl: "",
+    publishedAt: new Date(Date.now() - 1000 * 60 * 130).toISOString(),
+  },
+  {
+    id: "fallback-science-space",
+    category: "science",
+    title: "Science discoveries broaden the daily news mix",
+    description:
+      "Discovery picks include science, space, research, and future-focused stories.",
+    source: "NewsFeed Brief",
+    imageUrl: "",
+    publishedAt: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
+  },
+  {
+    id: "fallback-sports-weekend",
+    category: "sports",
+    title: "Sports highlights add another angle to the latest feed",
+    description:
+      "Follow sports categories to bring leagues, matches, and analysis into your homepage.",
+    source: "NewsFeed Brief",
+    imageUrl: "",
+    publishedAt: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
+  },
+  {
+    id: "fallback-entertainment-culture",
+    category: "entertainment",
+    title: "Culture and entertainment stories round out discovery",
+    description:
+      "Entertainment coverage helps Discover Something New stay varied across categories.",
+    source: "NewsFeed Brief",
+    imageUrl: "",
+    publishedAt: new Date(Date.now() - 1000 * 60 * 300).toISOString(),
+  },
+  {
+    id: "fallback-general-context",
+    category: "general",
+    title: "Sign in to turn reading history into smarter recommendations",
+    description:
+      "Once signed in, article opens, categories, and bookmarks help personalize future sections.",
+    source: "NewsFeed Brief",
+    imageUrl: "",
+    publishedAt: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
+  },
+];
 
 function Home() {
   const [searchParams] = useSearchParams();
@@ -131,16 +213,29 @@ function Home() {
     }
   };
 
-  const filteredArticles = filterArticles(articles, searchQuery);
+  const usingFallbackArticles = articles.length === 0;
+  const feedArticles = usingFallbackArticles ? FALLBACK_ARTICLES : articles;
+  const filteredArticles = filterArticles(feedArticles, searchQuery);
   const visibleArticles = isAuthenticated
     ? sortArticlesByPersonalization(filteredArticles, selectedCategories)
     : filteredArticles;
 
   const personalizedArticles = visibleArticles;
-  const hasMorePersonalized = Boolean(pagination?.hasMore);
+  const hasMorePersonalized = !usingFallbackArticles && Boolean(pagination?.hasMore);
+  const favoriteCategories = getTopProfileItems(
+    readingProfile.categoryWeights,
+    4
+  );
+  const favoriteKeywords = getTopProfileItems(readingProfile.keywordWeights, 5);
+  const profileCategories =
+    isAuthenticated
+      ? favoriteCategories.length
+        ? favoriteCategories
+        : selectedCategories
+      : ["general", "business", "technology", "sports"];
 
   const trendArticles = filterArticles(
-    sections?.trending || visibleArticles.slice(0, 8),
+    sections?.trending?.length ? sections.trending : visibleArticles.slice(0, 8),
     searchQuery
   );
 
@@ -149,6 +244,9 @@ function Home() {
         limit: 6,
       })
     : null;
+  const becauseYouReadFallback = visibleArticles.slice(8, 16).length
+    ? visibleArticles.slice(8, 16)
+    : visibleArticles.slice(0, 6);
 
   const becauseYouRead = {
     label:
@@ -158,22 +256,31 @@ function Home() {
     articles:
       keywordDiscovery?.articles ||
       filterArticles(
-        sections?.becauseYouRead?.articles || visibleArticles.slice(8, 16),
+        sections?.becauseYouRead?.articles?.length
+          ? sections.becauseYouRead.articles
+          : becauseYouReadFallback,
         searchQuery
       ),
   };
 
-  const readersLikeYou = filterArticles(
-    sections?.readersLikeYou?.length
-      ? sections.readersLikeYou
-      : visibleArticles.slice(16, 24),
-    searchQuery
-  );
+  const readersLikeYou = isAuthenticated
+    ? filterArticles(
+        sections?.readersLikeYou?.length
+          ? sections.readersLikeYou
+          : getInterestMatchedArticles(visibleArticles, {
+              selectedCategories,
+              favoriteCategories,
+              favoriteKeywords,
+            }),
+        searchQuery
+      )
+    : [];
 
   const discoveryArticles = filterArticles(
-    sections?.discovery?.length
-      ? sections.discovery
-      : visibleArticles.slice(24, 32),
+    getDiscoveryArticles(visibleArticles, {
+      sectionArticles: sections?.discovery,
+      selectedCategories: isAuthenticated ? selectedCategories : [],
+    }),
     searchQuery
   );
 
@@ -214,12 +321,6 @@ function Home() {
     isAuthenticated
       ? getRecommendationReason(article, selectedCategories)
       : "Sign in to personalize stories like this.";
-
-  const favoriteCategories = getTopProfileItems(
-    readingProfile.categoryWeights,
-    4
-  );
-  const favoriteKeywords = getTopProfileItems(readingProfile.keywordWeights, 5);
 
   return (
     <div className="dashboard-grid">
@@ -288,7 +389,7 @@ function Home() {
 
         {error && <div className="state-box error">{error}</div>}
 
-        {!loading && !error && (
+        {!loading && (
           <>
             {searchQuery && (
               <div className="search-status">
@@ -387,7 +488,7 @@ function Home() {
                 <SectionTitle title="Interest Profile" />
 
                 <ul>
-                  {(favoriteCategories.length ? favoriteCategories : selectedCategories)
+                  {profileCategories
                     .slice(0, 4)
                     .map((category) => (
                       <li key={category}>
@@ -410,33 +511,43 @@ function Home() {
               </div>
             </div>
 
-            <SectionTitle title="Readers Like You" />
+            {isAuthenticated && readersLikeYou.length > 0 && (
+              <>
+                <SectionTitle title="Readers Like You" />
 
-            <div className="compact-news-grid">
-              {readersLikeYou.slice(0, 8).map((news) => (
-                <CompactNewsCard
-                  key={news.id}
-                  news={news}
-                  onArticleOpen={handleArticleOpen}
-                  recommendationText={recommendationText(news)}
-                />
-              ))}
-            </div>
+                <div className="compact-news-grid">
+                  {readersLikeYou.slice(0, 8).map((news) => (
+                    <CompactNewsCard
+                      key={news.id}
+                      news={news}
+                      onArticleOpen={handleArticleOpen}
+                      recommendationText={recommendationText(news)}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
 
             <SectionTitle title="Discover Something New" />
 
-            <div className="popular-grid">
-              {discoveryArticles.slice(0, 8).map((news) => (
-                <NewsTile
-                  key={news.id}
-                  news={news}
-                  bookmarks={bookmarks}
-                  onArticleOpen={handleArticleOpen}
-                  onBookmark={handleBookmark}
-                  recommendationText={recommendationText(news)}
-                />
-              ))}
-            </div>
+            {discoveryArticles.length > 0 ? (
+              <div className="popular-grid">
+                {discoveryArticles.slice(0, 8).map((news) => (
+                  <NewsTile
+                    key={news.id}
+                    news={news}
+                    bookmarks={bookmarks}
+                    onArticleOpen={handleArticleOpen}
+                    onBookmark={handleBookmark}
+                    recommendationText={recommendationText(news)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="state-box">
+                Discovery stories will appear here after the feed refreshes.
+              </div>
+            )}
 
           </>
         )}
@@ -491,11 +602,7 @@ function Home() {
           </h3>
 
           <div className="interest-keywords">
-            {(isAuthenticated && favoriteCategories.length
-              ? favoriteCategories
-              : isAuthenticated
-                ? selectedCategories
-                : ["general", "business", "technology", "sports", "health"])
+            {profileCategories
               .slice(0, 5)
               .map((category) => (
                 <span key={category}>{categoryLabel(category)}</span>
@@ -714,6 +821,81 @@ function SafeImage({ src, category, alt }) {
 
 function SectionTitle({ title }) {
   return <h2 className="section-title">{title}</h2>;
+}
+
+function getInterestMatchedArticles(
+  articles,
+  { selectedCategories = [], favoriteCategories = [], favoriteKeywords = [] } = {}
+) {
+  const categorySet = new Set([...selectedCategories, ...favoriteCategories]);
+  const keywordSet = new Set(favoriteKeywords.map((keyword) => keyword.toLowerCase()));
+
+  const matchedArticles = articles.filter((article) => {
+    if (categorySet.has(article.category)) return true;
+
+    const searchableText = `${article.title || ""} ${article.description || ""}`.toLowerCase();
+    return [...keywordSet].some((keyword) => searchableText.includes(keyword));
+  });
+
+  return dedupeArticles(
+    matchedArticles.length ? matchedArticles : articles
+  ).slice(0, 8);
+}
+
+function getDiscoveryArticles(
+  articles,
+  { sectionArticles = [], selectedCategories = [] } = {}
+) {
+  const sectionList = Array.isArray(sectionArticles) ? sectionArticles : [];
+  const selectedSet = new Set(selectedCategories);
+  const preferredDiscovery = articles.filter(
+    (article) => article.category && !selectedSet.has(article.category)
+  );
+  const candidates = dedupeArticles([
+    ...sectionList,
+    ...preferredDiscovery,
+    ...articles,
+    ...FALLBACK_ARTICLES,
+  ]);
+
+  return pickDiverseArticles(candidates, 8);
+}
+
+function pickDiverseArticles(articles, limit) {
+  const byCategory = articles.reduce((groups, article) => {
+    const category = article.category || "general";
+    groups[category] = groups[category] || [];
+    groups[category].push(article);
+    return groups;
+  }, {});
+  const categories = Object.keys(byCategory);
+  const selected = [];
+
+  while (selected.length < limit && categories.length) {
+    let addedInRound = false;
+
+    categories.forEach((category) => {
+      const article = byCategory[category].shift();
+      if (article && selected.length < limit) {
+        selected.push(article);
+        addedInRound = true;
+      }
+    });
+
+    if (!addedInRound) break;
+  }
+
+  return selected;
+}
+
+function dedupeArticles(articles) {
+  const seen = new Set();
+
+  return articles.filter((article) => {
+    if (!article?.id || seen.has(article.id)) return false;
+    seen.add(article.id);
+    return true;
+  });
 }
 
 function getTopProfileItems(weights = {}, limit = 5) {
